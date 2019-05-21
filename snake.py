@@ -15,11 +15,11 @@ FPS = 5
 
 PALLETE = {
     'fg': (255, 255, 255),
-    'bg': (0, 0, 0)
+    'bg': (0, 0, 0),
+    'poison':(255, 0, 0)
 }
 
-class PygView(object):
-
+class PygView:
     def __init__(self):               
         pygame.init()
         pygame.display.set_caption("Press ESC to quit")
@@ -45,6 +45,20 @@ class PygView(object):
         self.totalplaytime = 0.0
         self.playtime = 0.0
 
+    # def blit(self):
+    #     pass
+    
+    # def update(self, inputs):
+    #     pass
+    
+    # def gameloop(self):
+    #     inputs = []
+    #     while True:
+    #         if self.last_update + 1000/ups > now():
+    #             self.update(inputs)
+    #         if self.quit:
+    #             break
+    #         self.blit()
 
     def paint_board(self):
         pygame.draw.rect(self.background, PALLETE['fg'],
@@ -70,6 +84,10 @@ class PygView(object):
         topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
         snake = [(BOARD_COL//2, BOARD_ROW//2)]
         food = []
+        poison = []
+        vegetable = []
+        vege_power = 0
+        food_count = 0
         dx = 1
         dy = 0
         while mainloop:
@@ -157,13 +175,28 @@ class PygView(object):
                                for b in range(BOARD_ROW)
                                if (a, b) not in snake]
                 if food == []:
-                    number = random.randint(0, len(empty_space)-1)
-                    food += [empty_space[number]]
+                    n = random.randint(0, len(empty_space)-1)
+                    food += [empty_space[n]]
+                    if poison == [] and vegetable == []:
+                        possibility = random.randint(0, 4)
+                        remaining_space = empty_space[:n] + empty_space[n+1:]
+                        print(possibility)
+                        if possibility == 0:
+                            poison += [remaining_space[random.randint(0, len(remaining_space)-1)]]
+                            food_count = 0
+                        #elif possibility == 1:
+                        #    vegetable += [remaining_space[random.randint(0, len(remaining_space)-1)]]
+                         #   food_count = 0
+                    if food_count > 2:
+                        food_count = 0
+                        poison = []
+                    #if food_count > 0:
+                    #    food_count = 0
+                    #    vegetable = []
 
                 new_head = (snake[0][0] + dx, snake[0][1] + dy)
 
                 if new_head in snake:
-                    print(111)
                     state = 'game over'
                 if new_head[0] < 0 or new_head[0] >= BOARD_COL:
                     state = 'game over'
@@ -173,7 +206,15 @@ class PygView(object):
 
                 if new_head in food:
                     snake = [new_head] + snake
+                    food_count += 1
                     food = []
+                elif new_head in poison:
+                    snake = [new_head] + snake[:len(snake)//2]
+                    poison = []
+                #elif new_head in vegetable:
+                #    snake = [new_head] + snake
+                #    vege_power = 5
+                #    vegetable = []
                 else:
                     snake = [new_head] + snake[:-1]
 
@@ -182,7 +223,10 @@ class PygView(object):
                     pygame.draw.rect(self.playground, PALLETE['fg'],
                                     (SNAKE_WIDTH*x, SNAKE_WIDTH*y,
                                     SNAKE_WIDTH, SNAKE_WIDTH))
-
+                for x, y in poison:
+                    pygame.draw.rect(self.playground, PALLETE['poison'],
+                                    (SNAKE_WIDTH*x, SNAKE_WIDTH*y,
+                                    SNAKE_WIDTH, SNAKE_WIDTH))
                 for x, y in snake:
                     pygame.draw.rect(self.playground, PALLETE['fg'],
                                     (SNAKE_WIDTH*x, SNAKE_WIDTH*y,
