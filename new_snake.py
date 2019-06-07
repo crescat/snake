@@ -62,9 +62,15 @@ class PygView:
                         (self.width//2, WINDOW_PADDING+HEADER), BORDER)
 
 
-    def update(self, event_queue, dx, dy):
-        pass
+    def update(self, event_queue):
+        directions = {'up':(0,-1), 'down':(0,1), 'left':(-1, 0), 'right':(1,0)}
+        event = event_queue[0]
+        return event_queue[1:], directions[event]
 
+
+    def update_snake(self, snake, dx, dy):
+        new_head = (snake[0][0] + dx, snake[0][1] + dy)
+        return [new_head] + snake[:-1]
 
 
     def queueing_events(self, events, event_queue):
@@ -108,6 +114,9 @@ class PygView:
         self.screen.blit(self.background, (0,0))
         mainloop = True
         event_queue = []
+        snake = [(BOARD_COL//2, BOARD_ROW//2)]
+        topleft_x = WINDOW_PADDING + BORDER - 1
+        topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
         dx, dy = 1, 0
 
         while mainloop:
@@ -120,8 +129,17 @@ class PygView:
             if event_queue is False:
                 mainloop = False
 
-            print(event_queue)
+            if event_queue:
+                event_queue, (dx, dy) = self.update(event_queue)
+            snake = self.update_snake(snake, dx, dy)
 
+            for x, y in snake:
+                pygame.draw.rect(self.playground, PALLETE['fg'],
+                                (SNAKE_WIDTH*x, SNAKE_WIDTH*y,
+                                SNAKE_WIDTH, SNAKE_WIDTH))
+
+            self.screen.blit(self.playground, (topleft_x, topleft_y))
+            self.playground.fill((0,0,0))
 
 
 
