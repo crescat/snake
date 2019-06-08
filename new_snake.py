@@ -13,6 +13,8 @@ BIG_FONT = 25
 SMALL_FONT = 15
 SCORE_FONT = 20
 FONT_TYPE = 'Ubuntu Mono'
+SNAKE_SPEED = 4 # cell per second
+FOOD_NUMBER = 2 # number of food generated at once
 FPS = 60
 
 PALLETE = {
@@ -46,7 +48,6 @@ class Clock:
         self.ups = new_ups
 
 
-
 class PygView:
     def __init__(self):
         pygame.init()
@@ -69,12 +70,13 @@ class PygView:
         self.timeboard = pygame.Surface(((BOARD_COL*SNAKE_WIDTH - BORDER+1)//2,
                                           HEADER - BORDER))
         self.render_clock = Clock(FPS)
-        self.event_update_clock = Clock(3)
-        self.snake_clock = Clock(3)
+        self.snake_clock = Clock(SNAKE_SPEED)
         self.clock = pygame.time.Clock()
 
         self.game_started = time.monotonic()
         self.program_started = time.monotonic()
+        self.snake_speed = SNAKE_SPEED
+        self.food_num = FOOD_NUMBER
 
 
     def paint_board(self):
@@ -92,15 +94,36 @@ class PygView:
                         (self.width//2, WINDOW_PADDING+HEADER), BORDER)
 
 
-    def update(self, event_queue):
-        directions = {'up':(0,-1), 'down':(0,1), 'left':(-1, 0), 'right':(1,0)}
+    def update(self, event_queue, directions, previous_pos):
+        oppo_direction = {'up':'down', 'down':'up', 'left':'right', 'right':'left'}
         event = event_queue[0]
-        return event_queue[1:], directions[event]
+        if oppo_direction[previous_pos] != event:
+            return event_queue[1:], directions[event], event
+        else:
+            return event_queue[1:], directions[previous_pos], previous_pos
 
 
-    def update_snake(self, snake, dx, dy):
+    def update_snake(self, snake, snake_dir, food_lst):
+        dx, dy = snake_dir
         new_head = (snake[0][0] + dx, snake[0][1] + dy)
-        return [new_head] + snake[:-1]
+
+        if new_head in food_lst:
+            i = food_lst.index(new_head)
+            food_lst = food_lst[:i] + food_lst[i+1:]
+            return [new_head] + snake, food_lst
+
+        return [new_head] + snake[:-1], food_lst
+
+
+    def is_dead(self, snake):
+        if len(snake) != len(set(snake)):
+            return True
+        if snake[0][0] < 0 or snake[0][0] >= BOARD_COL:
+            return True
+        if snake[0][1] < 0 or snake[0][1] >= BOARD_ROW:
+            return True
+
+        return False
 
 
     def queueing_events(self, events, event_queue):
@@ -123,14 +146,14 @@ class PygView:
             if event.type == pygame.QUIT:
                 return False
 
-            elif event.type == pygame.KEYDOWN:
+            if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
 
                 if event_queue == []:
                     event_queue.append(what_direction(event))
 
-                else:
+                elif event_queue and len(event_queue) <= 5:
                     direction = what_direction(event)
                     if event_queue[-1] != oppo_direction[direction] and \
                        event_queue[-1] != direction:
@@ -139,18 +162,57 @@ class PygView:
         return event_queue
 
 
+    def blit_squares(self, snake, color):
+        topleft_x = WINDOW_PADDING + BORDER - 1
+        topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
+        for (x, y) in snake:
+            pygame.draw.rect(self.playground, PALLETE[color],
+                            (SNAKE_WIDTH*x, SNAKE_WIDTH*y,
+                            SNAKE_WIDTH, SNAKE_WIDTH))
+
+        self.screen.blit(self.playground, (topleft_x, topleft_y))
+
+
+    def blit_text(self, bigtext, smalltext, color):
+        topleft_x = WINDOW_PADDING + BORDER - 1
+        topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
+        big = self.bigfont.render(bigtext, False, PALLETE['fg'])
+        small = self.smallfont.render(smalltext, False, PALLETE['fg'])
+        big_rect = big.get_rect( \
+            center=(self.board_width/2, self.board_height/2 - BIG_FONT))
+        small_rect = small.get_rect( \
+            center=(self.board_width/2, self.board_height/2))
+
+        self.playground.blit(big, big_rect)
+        self.playground.blit(small, small_rect)
+        self.screen.blit(self.playground, (topleft_x, topleft_y))
+
+
+    def generate_food(self, food_lst, snake):
+        empty_space = [(a, b) for a in range(BOARD_COL)
+                               for b in range(BOARD_ROW)
+                               if (a, b) not in snake]
+
+        for _ in range(self.food_num):
+            n = random.randint(0, len(empty_space)-1)
+            food_lst += [empty_space[n]]
+            empty_space = empty_space[:n] + empty_space[n+1:]
+
+        return food_lst
+
+
     def run(self):
+        directions = {'up':(0,-1), 'down':(0,1), 'left':(-1, 0), 'right':(1,0)}
         self.paint_board()
         self.screen.blit(self.background, (0,0))
 
         mainloop = True
         event_queue = []
+        food_lst = []
+        previous_pos = 'right'
+        snake_dir = directions[previous_pos]
         snake = [(BOARD_COL//2, BOARD_ROW//2)]
-        topleft_x = WINDOW_PADDING + BORDER - 1
-        topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
-        dx, dy = 1, 0
-        snake_speed = 1 # cell per sec
-        game_speed = 60
+        state = 'running'
 
 
         while mainloop:
@@ -158,23 +220,28 @@ class PygView:
             if event_queue is False:
                 mainloop = False
 
-            if self.event_update_clock.should_update() and event_queue:
-                event_queue, (dx, dy) = self.update(event_queue)
-
             if self.snake_clock.should_update():
-                snake = self.update_snake(snake, dx, dy)
+                if state == 'running':
+                    if event_queue:
+                        event_queue, snake_dir, previous_pos = self.update(event_queue, directions, previous_pos)
+                    if food_lst == []:
+                        food_lst = self.generate_food(food_lst, snake)
+
+                    snake, food_lst = self.update_snake(snake, snake_dir, food_lst)
+                if self.is_dead(snake):
+                    state = 'game over'
 
             if self.render_clock.should_update():
-                self.clock.tick()
-                for x, y in snake:
-                    pygame.draw.rect(self.playground, PALLETE['fg'],
-                                    (SNAKE_WIDTH*x, SNAKE_WIDTH*y,
-                                    SNAKE_WIDTH, SNAKE_WIDTH))
-
-                self.screen.blit(self.playground, (topleft_x, topleft_y))
                 self.playground.fill((0,0,0))
-                playtime = time.monotonic() - self.game_started
+                self.clock.tick()
+                if state == 'running':
+                    self.blit_squares(snake, 'fg')
+                    self.blit_squares(food_lst, 'fg')
 
+                elif state == 'game over':
+                    self.blit_text('game over', 'press space to continue', 'fg')
+
+                playtime = time.monotonic() - self.game_started
                 text = 'FPS: {0:.2f}, Playtime: {1:.2f}'.format(self.clock.get_fps(), playtime)
                 pygame.display.set_caption(text)
                 pygame.display.update()
