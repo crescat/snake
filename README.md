@@ -11,18 +11,18 @@ python 3.6.1 or greater is required.
 if python is already installed, install pygame by pip:
 
 ```bash
-$ python3 -m pip install -U pygame --user
-```
-To check if pygame is installed successfully, you can run one of the included examples:
-
-```bash
-$ python3 -m pygame.examples.aliens
+$ pip install -U pygame --user
 ```
 
 See more details [here](https://www.pygame.org/wiki/GettingStarted).
 
 
 ## How to play
+
+Run this line to start the game:
+```bash
+$ python3 snake.py
+```
 
 ![alt text](https://github.com/crescat/snake/blob/master/screenshots/foods.gif "different foods")
 
