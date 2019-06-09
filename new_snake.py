@@ -156,6 +156,7 @@ class PygView:
 
         elif new_head in self.super_lst:
             self.is_super = True
+            self.snake_clock.ups *= 2
             self.super_lst = []
             self.nutrition += 10
             self.super_count = 0
@@ -175,6 +176,8 @@ class PygView:
             self.add_counts(['vege', 'super'])
 
         else:
+            if self.is_super:
+                self.snake_clock.ups /= 2
             self.is_super = False
             self.snake = [new_head] + self.snake[:-1]
 
