@@ -17,7 +17,7 @@ SNAKE_SPEED = 4 # cell per second
 FOOD_NUMBER = 2 # number of food generated at once
 POISON_PROBABILITY = 15 # % chance of poison to generate
 VEGE_PROBABILITY = 20 # % chance of vegetable to generate
-SUPER_PROBABILITY = 5
+SUPER_PROBABILITY = 80
 POISON_LAST = 5 # how long will poison remian on board
 VEGE_LAST = 2   # how long will vege remain
 SUPER_LAST = 1
@@ -29,6 +29,13 @@ PALLETE = {
     'poison': (255, 0, 0),
     'vege': (0, 255, 0)
 }
+
+SUPER_COLORS = [
+    (255, 255, 255),
+    (255, 127, 255),
+    (255, 255, 127),
+    (127, 255, 255)
+]
 
 directions = {'up':(0,-1), 'down':(0,1), 'left':(-1, 0), 'right':(1,0)}
 title = pygame.image.load('snake.png')
@@ -85,6 +92,7 @@ class PygView:
                                           HEADER - BORDER))
         self.render_clock = Clock(FPS)
         self.snake_clock = Clock(SNAKE_SPEED)
+        self.flashing_clock = Clock(5)
         self.clock = pygame.time.Clock()
 
         self.program_started = time.monotonic()
@@ -142,7 +150,7 @@ class PygView:
 
         elif new_head in self.vege_lst:
             self.vege_lst = []
-            self.nutrition += 2
+            self.nutrition += 3
             self.vege_count = 0
             self.add_counts(['poison', 'super'])
 
@@ -226,10 +234,10 @@ class PygView:
     def blit_squares(self, snake, color):
         topleft_x = WINDOW_PADDING + BORDER - 1
         topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
-        if color == 'random':
-            rgb = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        else:
+        if color in PALLETE:
             rgb = PALLETE[color]
+        elif type(color) is tuple and len(color) == 3:
+            rgb = color
 
         for (x, y) in snake:
             pygame.draw.rect(self.playground, rgb,
@@ -365,6 +373,7 @@ class PygView:
         self.is_super = False
         self.nutrition = 0
 
+
     def change_game_state(self):
         if self.state == 'running':
             self.state = 'paused'
@@ -390,6 +399,7 @@ class PygView:
         self.state = 'not started'
         self.blit_title('Press space to start')
         mainloop = True
+        i = 0
 
         while mainloop:
             self.event_queue = self.queueing_events(pygame.event.get(), self.event_queue)
@@ -410,15 +420,19 @@ class PygView:
             if self.render_clock.should_update():
                 self.playground.fill((0,0,0))
                 self.clock.tick()
+
+                if self.flashing_clock.should_update():
+                    i += 1
+                    i %= len(SUPER_COLORS)
                 if self.state == 'running':
                     if self.is_super:
-                        self.blit_squares(self.snake, 'random')
+                        self.blit_squares(self.snake, SUPER_COLORS[i])
                     else:
                         self.blit_squares(self.snake, 'fg')
                     self.blit_squares(self.food_lst, 'fg')
                     self.blit_squares(self.poison_lst, 'poison')
                     self.blit_squares(self.vege_lst, 'vege')
-                    self.blit_squares(self.super_lst, 'random')
+                    self.blit_squares(self.super_lst, SUPER_COLORS[i])
                     self.blit_score(len(self.snake) - 1)
                     self.blit_time(time.monotonic() - self.game_started - self.total_paused)
 
