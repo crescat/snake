@@ -197,6 +197,30 @@ class PygView:
         self.screen.blit(self.playground, (topleft_x, topleft_y))
 
 
+    def blit_score(self, score):
+        self.scoreboard.fill(PALLETE['bg'])
+        score = self.scorefont.render('Score:{}'.format(str(score)),
+                                    False, PALLETE['fg'])
+        score_rect = score.get_rect( \
+                center=(self.scoreboard.get_width()/2,
+                        self.scoreboard.get_height()/2))
+        self.scoreboard.blit(score, score_rect)
+        self.screen.blit(self.scoreboard,
+                        (topleft_x, WINDOW_PADDING + BORDER -1))
+
+
+    def blit_time(self, time):
+        self.timeboard.fill(PALLETE['bg'])
+        time = self.scorefont.render('Time:{}'.format(int(time)),
+                                    False, PALLETE['fg'])
+        time_rect = time.get_rect( \
+                center=(self.timeboard.get_width()/2,
+                        self.timeboard.get_height()/2))
+        self.timeboard.blit(time, time_rect)
+        self.screen.blit(self.timeboard,
+                        (self.width // 2 + 1, WINDOW_PADDING + BORDER -1))
+
+
     def generate_food(self):
         empty_space = [(a, b) for a in range(BOARD_COL)
                                for b in range(BOARD_ROW)
@@ -266,6 +290,8 @@ class PygView:
                 if self.state == 'running':
                     self.blit_squares(self.snake, 'fg')
                     self.blit_squares(self.food_lst, 'fg')
+                    self.blit_score(len(self.snake) - 1)
+                    self.blit_time(time.monotonic() - self.game_started - self.total_paused)
 
                 elif self.state == 'game over':
                     self.blit_text('game over', 'press space to continue', 'fg')
@@ -273,7 +299,7 @@ class PygView:
                 elif self.state == 'paused':
                     self.blit_text('Paused', 'press space to resume', 'fg')
 
-                total_playtime = time.monotonic() - self.program_started - self.total_paused
+                total_playtime = time.monotonic() - self.program_started
                 text = 'FPS: {0:.2f}, Playtime: {1:.2f}'.format(self.clock.get_fps(), total_playtime)
                 pygame.display.set_caption(text)
                 pygame.display.update()
