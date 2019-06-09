@@ -24,6 +24,11 @@ PALLETE = {
 }
 
 directions = {'up':(0,-1), 'down':(0,1), 'left':(-1, 0), 'right':(1,0)}
+title = pygame.image.load('snake.png')
+title_x, title_y = title.get_rect().size
+mag_index = SNAKE_WIDTH * BOARD_COL // title_x
+title = pygame.transform.scale(title, (title_x*mag_index, title_y*mag_index))
+
 
 class Clock:
     def __init__(self, ups):
@@ -104,7 +109,7 @@ class PygView:
             self.previous_pos = event
         else:
             self.event_queue = self.event_queue[1:]
-            self.snake_dir = directions[previous_pos]
+            self.snake_dir = directions[self.previous_pos]
 
 
     def update_snake(self):
@@ -182,6 +187,20 @@ class PygView:
         self.screen.blit(self.playground, (topleft_x, topleft_y))
 
 
+    def blit_title(self, smalltext):
+        topleft_x = WINDOW_PADDING + BORDER - 1
+        topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
+        small = self.smallfont.render(smalltext, False, PALLETE['fg'])
+        title_rect = title.get_rect( \
+            center=(self.board_width/2, self.board_height/2 - BIG_FONT))
+        small_rect = small.get_rect( \
+            center=(self.board_width/2, self.board_height/2 + SMALL_FONT))
+
+        self.playground.blit(title, title_rect)
+        self.playground.blit(small, small_rect)
+        self.screen.blit(self.playground, (topleft_x, topleft_y))
+
+
     def blit_text(self, bigtext, smalltext, color):
         topleft_x = WINDOW_PADDING + BORDER - 1
         topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
@@ -206,7 +225,7 @@ class PygView:
                         self.scoreboard.get_height()/2))
         self.scoreboard.blit(score, score_rect)
         self.screen.blit(self.scoreboard,
-                        (topleft_x, WINDOW_PADDING + BORDER -1))
+                        (WINDOW_PADDING + BORDER - 1, WINDOW_PADDING + BORDER -1))
 
 
     def blit_time(self, time):
@@ -233,7 +252,6 @@ class PygView:
 
 
     def start_game(self):
-
         self.event_queue = []
         self.food_lst = []
         self.previous_pos = 'right'
@@ -242,6 +260,7 @@ class PygView:
         self.state = 'running'
         self.game_started = time.monotonic()
         self.time_paused = 0
+        self.time_resumed = 0
         self.total_paused = 0
 
 
@@ -253,10 +272,11 @@ class PygView:
 
         elif self.state == 'paused':
             self.state = 'running'
-            self.total_paused = time.monotonic() - self.time_paused
+            self.time_resumed = time.monotonic()
+            self.total_paused += self.time_resumed - self.time_paused
             self.snake_clock.unpause()
 
-        elif self.state == 'game over':
+        elif self.state == 'game over' or self.state == 'not started':
             self.state = 'running'
             self.start_game()
 
@@ -266,6 +286,8 @@ class PygView:
         self.paint_board()
         self.screen.blit(self.background, (0,0))
         self.start_game()
+        self.state = 'not started'
+        self.blit_title('Press space to start')
         mainloop = True
 
         while mainloop:
@@ -294,7 +316,7 @@ class PygView:
                     self.blit_time(time.monotonic() - self.game_started - self.total_paused)
 
                 elif self.state == 'game over':
-                    self.blit_text('game over', 'press space to continue', 'fg')
+                    self.blit_text('Game over', 'press space to restart', 'fg')
 
                 elif self.state == 'paused':
                     self.blit_text('Paused', 'press space to resume', 'fg')
