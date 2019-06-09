@@ -23,6 +23,8 @@ PALLETE = {
     'poison':(255, 0, 0)
 }
 
+directions = {'up':(0,-1), 'down':(0,1), 'left':(-1, 0), 'right':(1,0)}
+
 class Clock:
     def __init__(self, ups):
         self.ups = ups
@@ -73,7 +75,6 @@ class PygView:
         self.snake_clock = Clock(SNAKE_SPEED)
         self.clock = pygame.time.Clock()
 
-        self.game_started = time.monotonic()
         self.program_started = time.monotonic()
         self.snake_speed = SNAKE_SPEED
         self.food_num = FOOD_NUMBER
@@ -94,33 +95,36 @@ class PygView:
                         (self.width//2, WINDOW_PADDING+HEADER), BORDER)
 
 
-    def update(self, event_queue, directions, previous_pos):
+    def update(self):
         oppo_direction = {'up':'down', 'down':'up', 'left':'right', 'right':'left'}
         event = self.event_queue[0]
         if oppo_direction[self.previous_pos] != event:
-            return self.event_queue[1:], directions[event], event
+            self.event_queue = self.event_queue[1:]
+            self.snake_dir = directions[event]
+            self.previous_pos = event
         else:
-            return self.event_queue[1:], directions[self.previous_pos], self.previous_pos
+            self.event_queue = self.event_queue[1:]
+            self.snake_dir = directions[previous_pos]
 
 
-    def update_snake(self, self.snake, self.snake_dir, food_lst):
+    def update_snake(self):
         dx, dy = self.snake_dir
         new_head = (self.snake[0][0] + dx, self.snake[0][1] + dy)
 
         if new_head in self.food_lst:
             i = self.food_lst.index(new_head)
             self.food_lst = self.food_lst[:i] + self.food_lst[i+1:]
-            return [new_head] + self.snake, self.food_lst
+            self.snake = [new_head] + self.snake
+        else:
+            self.snake = [new_head] + self.snake[:-1]
 
-        return [new_head] + self.snake[:-1], self.food_lst
 
-
-    def is_dead(self, self.snake):
-        if len(self.snake) != len(set(self.snake)):
+    def is_dead(self, snake):
+        if len(snake) != len(set(snake)):
             return True
-        if self.snake[0][0] < 0 or self.snake[0][0] >= BOARD_COL:
+        if snake[0][0] < 0 or snake[0][0] >= BOARD_COL:
             return True
-        if self.snake[0][1] < 0 or self.snake[0][1] >= BOARD_ROW:
+        if snake[0][1] < 0 or snake[0][1] >= BOARD_ROW:
             return True
 
         return False
@@ -151,25 +155,26 @@ class PygView:
                     return False
 
                 elif event.key == pygame.K_SPACE:
-                    return ['space'] + self.event_queue
+                    self.change_game_state()
+                    return event_queue
 
                 direction = what_direction(event)
                 if direction:
-                    if self.event_queue == []:
-                        self.event_queue.append(direction)
+                    if event_queue == []:
+                        event_queue.append(direction)
 
-                    elif self.event_queue and len(self.event_queue) <= 3:
-                        if self.event_queue[-1] != oppo_direction[direction] and \
-                        self.event_queue[-1] != direction:
-                            self.event_queue.append(direction)
+                    elif event_queue and len(event_queue) <= 3:
+                        if event_queue[-1] != oppo_direction[direction] and \
+                           event_queue[-1] != direction:
+                            event_queue.append(direction)
 
-        return self.event_queue
+        return event_queue
 
 
-    def blit_squares(self, self.snake, color):
+    def blit_squares(self, snake, color):
         topleft_x = WINDOW_PADDING + BORDER - 1
         topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
-        for (x, y) in self.snake:
+        for (x, y) in snake:
             pygame.draw.rect(self.playground, PALLETE[color],
                             (SNAKE_WIDTH*x, SNAKE_WIDTH*y,
                             SNAKE_WIDTH, SNAKE_WIDTH))
@@ -192,65 +197,66 @@ class PygView:
         self.screen.blit(self.playground, (topleft_x, topleft_y))
 
 
-    def generate_food(self, food_lst, snake):
+    def generate_food(self):
         empty_space = [(a, b) for a in range(BOARD_COL)
                                for b in range(BOARD_ROW)
                                if (a, b) not in self.snake]
 
         for _ in range(self.food_num):
             n = random.randint(0, len(empty_space)-1)
-            self.food_lst += [empty_space[n]]
+            self.food_lst.append(empty_space[n])
             empty_space = empty_space[:n] + empty_space[n+1:]
-
-        return self.food_lst
 
 
     def start_game(self):
+
         self.event_queue = []
         self.food_lst = []
         self.previous_pos = 'right'
         self.snake_dir = directions[self.previous_pos]
         self.snake = [(BOARD_COL//2, BOARD_ROW//2)]
         self.state = 'running'
+        self.game_started = time.monotonic()
+        self.time_paused = 0
+        self.total_paused = 0
+
+
+    def change_game_state(self):
+        if self.state == 'running':
+            self.state = 'paused'
+            self.time_paused = time.monotonic()
+            self.snake_clock.pause()
+
+        elif self.state == 'paused':
+            self.state = 'running'
+            self.total_paused = time.monotonic() - self.time_paused
+            self.snake_clock.unpause()
+
+        elif self.state == 'game over':
+            self.state = 'running'
+            self.start_game()
 
 
     def run(self):
         directions = {'up':(0,-1), 'down':(0,1), 'left':(-1, 0), 'right':(1,0)}
         self.paint_board()
         self.screen.blit(self.background, (0,0))
-
+        self.start_game()
         mainloop = True
-
-
 
         while mainloop:
             self.event_queue = self.queueing_events(pygame.event.get(), self.event_queue)
             if self.event_queue is False:
                 mainloop = False
 
-            if self.event_queue:
-                if self.event_queue[0] == 'space':
-                    if self.state == 'running':
-                        self.state == 'paused'
-                        self.snake_clock.pause()
-
-                    elif self.state == 'paused':
-                        self.state == 'running'
-                        self.snake_clock.unpause()
-
-                    elif self.state == 'game over':
-                        self.state = 'running'
-
-
             if self.snake_clock.should_update():
                 if self.state == 'running':
                     if self.event_queue:
-                        self.event_queue, self.snake_dir, self.previous_pos = \
-                            self.update(self.event_queue, directions, self.previous_pos)
+                        self.update()
                     if self.food_lst == []:
-                        self.food_lst = self.generate_food(self.food_lst, self.snake)
+                        self.generate_food()
+                    self.update_snake()
 
-                    self.snake, self.food_lst = self.update_snake(self.snake, self.snake_dir, self.food_lst)
                 if self.is_dead(self.snake):
                     self.state = 'game over'
 
@@ -264,8 +270,11 @@ class PygView:
                 elif self.state == 'game over':
                     self.blit_text('game over', 'press space to continue', 'fg')
 
-                playtime = time.monotonic() - self.game_started
-                text = 'FPS: {0:.2f}, Playtime: {1:.2f}'.format(self.clock.get_fps(), playtime)
+                elif self.state == 'paused':
+                    self.blit_text('Paused', 'press space to resume', 'fg')
+
+                total_playtime = time.monotonic() - self.program_started - self.total_paused
+                text = 'FPS: {0:.2f}, Playtime: {1:.2f}'.format(self.clock.get_fps(), total_playtime)
                 pygame.display.set_caption(text)
                 pygame.display.update()
 
