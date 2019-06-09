@@ -15,12 +15,19 @@ SCORE_FONT = 20
 FONT_TYPE = 'Ubuntu Mono'
 SNAKE_SPEED = 4 # cell per second
 FOOD_NUMBER = 2 # number of food generated at once
+POISON_PROBABILITY = 15 # % chance of poison to generate
+VEGE_PROBABILITY = 20 # % chance of vegetable to generate
+SUPER_PROBABILITY = 5
+POISON_LAST = 5 # how long will poison remian on board
+VEGE_LAST = 2   # how long will vege remain
+SUPER_LAST = 1
 FPS = 60
 
 PALLETE = {
     'fg': (255, 255, 255),
     'bg': (0, 0, 0),
-    'poison':(255, 0, 0)
+    'poison': (255, 0, 0),
+    'vege': (0, 255, 0)
 }
 
 directions = {'up':(0,-1), 'down':(0,1), 'left':(-1, 0), 'right':(1,0)}
@@ -112,6 +119,14 @@ class PygView:
             self.snake_dir = directions[self.previous_pos]
 
 
+    def add_counts(self, count_type):
+        if self.poison_lst and 'poison' in count_type:
+            self.poison_count += 1
+        if self.vege_lst and 'vege' in count_type:
+            self.vege_count += 1
+        if self.super_lst and 'super' in count_type:
+            self.super_count += 1
+
     def update_snake(self):
         dx, dy = self.snake_dir
         new_head = (self.snake[0][0] + dx, self.snake[0][1] + dy)
@@ -119,8 +134,40 @@ class PygView:
         if new_head in self.food_lst:
             i = self.food_lst.index(new_head)
             self.food_lst = self.food_lst[:i] + self.food_lst[i+1:]
+            self.nutrition += 1
+            self.generate_poison(POISON_PROBABILITY)
+            self.generate_vegetable(VEGE_PROBABILITY)
+            self.generate_super(SUPER_PROBABILITY)
+            self.add_counts(['poison', 'vege', 'super'])
+
+        elif new_head in self.vege_lst:
+            self.vege_lst = []
+            self.nutrition += 2
+            self.vege_count = 0
+            self.add_counts(['poison', 'super'])
+
+        elif new_head in self.super_lst:
+            self.is_super = True
+            self.super_lst = []
+            self.nutrition += 10
+            self.super_count = 0
+            self.food_lst = []
+            self.poison_lst = []
+            self.vege_lst = []
+
+
+        if self.nutrition > 0:
             self.snake = [new_head] + self.snake
+            self.nutrition -= 1
+
+        elif new_head in self.poison_lst:
+            self.poison_lst = []
+            self.snake = [new_head] + self.snake[:len(self.snake)//2]
+            self.poison_count = 0
+            self.add_counts(['vege', 'super'])
+
         else:
+            self.is_super = False
             self.snake = [new_head] + self.snake[:-1]
 
 
@@ -179,8 +226,13 @@ class PygView:
     def blit_squares(self, snake, color):
         topleft_x = WINDOW_PADDING + BORDER - 1
         topleft_y = WINDOW_PADDING + BORDER + HEADER - 1
+        if color == 'random':
+            rgb = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+        else:
+            rgb = PALLETE[color]
+
         for (x, y) in snake:
-            pygame.draw.rect(self.playground, PALLETE[color],
+            pygame.draw.rect(self.playground, rgb,
                             (SNAKE_WIDTH*x, SNAKE_WIDTH*y,
                             SNAKE_WIDTH, SNAKE_WIDTH))
 
@@ -241,19 +293,67 @@ class PygView:
 
 
     def generate_food(self):
+        for _ in range(self.food_num):
+            empty_space = self.generate_legal_coord()
+            self.food_lst.append(empty_space)
+
+
+    def generate_legal_coord(self):
         empty_space = [(a, b) for a in range(BOARD_COL)
                                for b in range(BOARD_ROW)
                                if (a, b) not in self.snake]
+        n = random.randint(0, len(empty_space)-1)
+        return empty_space[n]
 
-        for _ in range(self.food_num):
-            n = random.randint(0, len(empty_space)-1)
-            self.food_lst.append(empty_space[n])
-            empty_space = empty_space[:n] + empty_space[n+1:]
+
+    def is_chance(self, probability):
+        random_number = random.uniform(0, 1)
+        if random_number <= probability/100:
+            return True
+        return False
+
+
+    def generate_poison(self, probability):
+        if self.is_chance(probability):
+            if self.poison_lst == []:
+                self.poison_lst.append(self.generate_legal_coord())
+                self.poison_count = 0
+
+        if self.poison_count >= POISON_LAST:
+            self.poison_lst = []
+            self.poison_count = 0
+
+
+    def generate_vegetable(self, probability):
+        if self.is_chance(probability):
+            if self.vege_lst == []:
+                self.vege_lst.append(self.generate_legal_coord())
+                self.vege_count = 0
+
+        if self.vege_count >= VEGE_LAST:
+            self.vege_lst = []
+            self.vege_count = 0
+
+
+    def generate_super(self, probability):
+        if self.is_chance(probability):
+            if self.super_lst == []:
+                self.super_lst.append(self.generate_legal_coord())
+
+        if self.super_count >= SUPER_LAST:
+            self.super_lst = []
+            self.super_count = 0
 
 
     def start_game(self):
         self.event_queue = []
         self.food_lst = []
+        self.poison_lst = []
+        self.vege_lst = []
+        self.super_lst = []
+        self.poison_count = 0
+        self.vege_count = 0
+        self.super_count = 0
         self.previous_pos = 'right'
         self.snake_dir = directions[self.previous_pos]
         self.snake = [(BOARD_COL//2, BOARD_ROW//2)]
@@ -262,7 +362,8 @@ class PygView:
         self.time_paused = 0
         self.time_resumed = 0
         self.total_paused = 0
-
+        self.is_super = False
+        self.nutrition = 0
 
     def change_game_state(self):
         if self.state == 'running':
@@ -299,7 +400,7 @@ class PygView:
                 if self.state == 'running':
                     if self.event_queue:
                         self.update()
-                    if self.food_lst == []:
+                    if not self.is_super and self.food_lst == []:
                         self.generate_food()
                     self.update_snake()
 
@@ -310,8 +411,14 @@ class PygView:
                 self.playground.fill((0,0,0))
                 self.clock.tick()
                 if self.state == 'running':
-                    self.blit_squares(self.snake, 'fg')
+                    if self.is_super:
+                        self.blit_squares(self.snake, 'random')
+                    else:
+                        self.blit_squares(self.snake, 'fg')
                     self.blit_squares(self.food_lst, 'fg')
+                    self.blit_squares(self.poison_lst, 'poison')
+                    self.blit_squares(self.vege_lst, 'vege')
+                    self.blit_squares(self.super_lst, 'random')
                     self.blit_score(len(self.snake) - 1)
                     self.blit_time(time.monotonic() - self.game_started - self.total_paused)
 
