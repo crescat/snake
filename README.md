@@ -48,4 +48,4 @@ You can press space any time to pause the game.
 
 ![alt text](https://github.com/crescat/snake/blob/master/screenshots/game_over.png "game over")
 
-Snake will die if it eats itself or hit the wall. You can press space to restart the game.
+Snake will die if it eats itself or hits the wall. You can press space to restart the game.
