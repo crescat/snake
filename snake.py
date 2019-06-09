@@ -14,10 +14,10 @@ SMALL_FONT = 15
 SCORE_FONT = 20
 FONT_TYPE = 'Ubuntu Mono'
 SNAKE_SPEED = 4 # cell per second
-FOOD_NUMBER = 2 # number of food generated at once
+FOOD_NUMBER = 1 # number of food generated at once
 POISON_PROBABILITY = 15 # % chance of poison to generate
 VEGE_PROBABILITY = 20 # % chance of vegetable to generate
-SUPER_PROBABILITY = 80
+SUPER_PROBABILITY = 5
 POISON_LAST = 5 # how long will poison remian on board
 VEGE_LAST = 2   # how long will vege remain
 SUPER_LAST = 1
@@ -31,10 +31,14 @@ PALLETE = {
 }
 
 SUPER_COLORS = [
-    (255, 255, 255),
-    (255, 127, 255),
-    (255, 255, 127),
-    (127, 255, 255)
+    (255, 80, 80),
+    (255, 153, 51),
+    (255, 255, 102),
+    (153, 255, 102),
+    (102, 255, 255),
+    (0, 153, 255),
+    (204, 0, 204),
+    (255, 153, 204)
 ]
 
 directions = {'up':(0,-1), 'down':(0,1), 'left':(-1, 0), 'right':(1,0)}
@@ -92,7 +96,7 @@ class PygView:
                                           HEADER - BORDER))
         self.render_clock = Clock(FPS)
         self.snake_clock = Clock(SNAKE_SPEED)
-        self.flashing_clock = Clock(5)
+        self.flashing_clock = Clock(10)
         self.clock = pygame.time.Clock()
 
         self.program_started = time.monotonic()
