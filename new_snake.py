@@ -1,18 +1,22 @@
 import pygame
 import random
+import time
 
 class Game:
     def __init__(self, window_width=800, window_height=500):
         pygame.init()
         self.width = window_width
         self.height = window_height
+        self.snake_clock = Clock(10)
+        self.render_clock = Clock(60)
 
 
     def start(self):
         self.screen = Screen(self.width, self.height)
-        #self.snake = Snake()
+        self.snake = Snake()
         self.background = Surface(self.width, self.height, (255, 0, 0))
         self.running = True
+        self.state = 'running'
         self.event_queue = []
         self.food_lst = []
 
@@ -22,8 +26,17 @@ class Game:
         while self.running:
             self.get_events(pygame.event.get())
             self.generate_food(2)
-            self.update()
-            self.screen.blit(self.background.get_surface(), (0,0))
+
+            if self.snake_clock.should_update():
+                if self.state == 'running':
+                    self.update()
+
+            if self.render_clock.should_update():
+                snake_board = self.snake.get_area()
+                snake_board.blit_snake(self.snake.get_width(), self.snake.get_body(), \
+                                       (255,255,255))
+                self.background.blit(snake_board.get_surface(), (10, 10))
+                self.screen.blit(self.background.get_surface(), (0,0))
         pygame.quit()
 
 
@@ -31,12 +44,34 @@ class Game:
         if self.event_queue is False:
             self.running = False
         if self.event_queue:
-            for event in self.event_queue:
-                #self.snake.update(event)
-                pass
+            event = self.event_queue[0]
+            self.event_queue = self.event_queue[1:]
+            self.snake.change_facing(event)
+        new_head = self.snake.get_snake_head()
+        nutrition = self.check_snake_head(new_head)
+        if nutrition:
+            for food in self.food_lst:
+                food.time_passed()
+                if food.is_rotted():
+                    self.food_lst.remove(food)
+            self.generate_special('poison', 10)
+            self.generate_special('vege', 20)
+            self.generate_special('super', 5)
+        self.snake.update(new_head, nutrition)
 
 
     def get_events(self, events):
+        def what_direction(event):
+            if event.key == pygame.K_UP:
+                return 'up'
+            elif event.key == pygame.K_DOWN:
+                return 'down'
+            elif event.key == pygame.K_LEFT:
+                return 'left'
+            elif event.key == pygame.K_RIGHT:
+                return 'right'
+
+        oppo_direction = {'up':'down', 'down':'up', 'left':'right', 'right':'left'}
         for event in events:
             if event.type == pygame.QUIT:
                 self.event_queue = False
@@ -44,6 +79,20 @@ class Game:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.event_queue = False
+                elif event.key == pygame.K_SPACE:
+                    self.change_game_state()
+                    return event_queue
+
+                direction = what_direction(event)
+                if direction:
+                    if self.event_queue == []:
+                        self.event_queue.append(direction)
+
+                    elif self.event_queue and len(self.event_queue) <= 3:
+                        if self.event_queue[-1] != oppo_direction[direction] and \
+                           self.event_queue[-1] != direction:
+                            self.event_queue.append(direction)
+
 
     def generate_food(self, max_food_num):
         area = self.snake.get_area()
@@ -54,7 +103,7 @@ class Game:
         existing_points = snake_body+food_pos
         if normal_food_num == 0:
             for _ in range(max_food_num):
-                point = area.generate_random_point(snake.get_width, existing_points)
+                point = area.generate_random_point(self.snake.get_width(), existing_points)
                 self.food_lst.append(Food(point))
                 existing_points += [point]
 
@@ -62,17 +111,58 @@ class Game:
     def generate_special(self, food_type, probability):
         area = self.snake.get_area()
         snake_body = self.snake.get_body()
-        food_pos = [food.get_position for food in self.food_lst]
+        food_pos = [food.get_position() for food in self.food_lst]
+        existing_points = snake_body+food_pos
 
         random_number = random.uniform(0, 1)
         if random_number <= probability/100:
-            point = area.generate_random_point(snake.get_width, existing_points)
-            if food_type == 'poison'
+            point = area.generate_random_point(self.snake.get_width(), existing_points)
+            if food_type == 'poison':
                 self.food_lst.append(Food(point, food_type, 5))
             elif food_type == 'vege':
                 self.food_lst.append(Food(point, food_type, 3))
-            elif food_type = 'super':
+            elif food_type == 'super':
                 self.food_lst.append(Food(point, food_type, 1))
+
+
+    def check_snake_head(self, snake_head):
+        for food in self.food_lst:
+            if food.get_position() == snake_head:
+                food_type = food.get_type()
+                self.food_lst.remove(food)
+                if food_type == 'normal':
+                    return 1
+                elif food_type == 'vege':
+                    return 3
+                elif food_type == 'super':
+                    return 10
+                elif food_type == 'poison':
+                    return -999
+        return 0
+
+class Clock:
+    def __init__(self, ups):
+        self.ups = ups
+        self.prev_time = time.monotonic()
+        self.paused = False
+
+    def should_update(self):
+        if self.paused:
+            return False
+        now = time.monotonic()
+        if now - self.prev_time >= 1 / self.ups:
+            self.prev_time = now
+            return True
+        return False
+
+    def pause(self):
+        self.paused = True
+
+    def unpause(self):
+        self.paused = False
+
+    def set_ups(self, new_ups):
+        self.ups = new_ups
 
 
 class Screen:
@@ -108,6 +198,11 @@ class Surface:
         n = random.randint(0, len(empty_space)-1)
         return empty_space[n]
 
+    def blit_snake(self, snake_width, snake, color):
+        for (x, y) in snake:
+            pygame.draw.rect(self.surface, color,
+                            (snake_width*x, snake_width*y,
+                            snake_width, snake_width))
 
     def get_surface(self):
         return self.surface
@@ -120,28 +215,15 @@ class Snake:
         self.area_x = area[0]
         self.area_y = area[1]
         self.facing = facing
-        self.body = [(col//2, row//2)]
-        self.area = Surface((self.width*self.area_x, self.width*self.area_y))
+        self.body = [(self.area_x//2, self.area_y//2)]
+        self.area = Surface(self.width*self.area_x, self.width*self.area_y)
         self.nutrition = 0
 
 
     def change_facing(self, direction):
         oppo_direction = {'up':'down', 'down':'up', 'left':'right', 'right':'left'}
-        if direction != oppo_direction(self.facing):
+        if direction != oppo_direction[self.facing]:
             self.facing = direction
-
-
-    def get_new_head(self):
-        x, y = self.body[0]
-        if self.facing == 'up':
-            new_head = (x, y-1)
-        elif self.facing == 'down':
-            new_head = (x, y+1)
-        elif self.facing == 'left':
-            new_head = (x-1, y)
-        elif self.facing == 'right':
-            new_head = (x+1, y)
-        return new_head
 
 
     def move(self, new_head):
@@ -158,40 +240,36 @@ class Snake:
         self.nutrition = 0
 
 
-    def check_food(self, new_head, food_lst, food_type):
-        if new_head in food_lst:
-            if food_type == 'normal':
-                self.nutrition += 1
-            elif food_type == 'vege':
-                self.nutrition += 3
-            elif food_type == 'super':
-                self.nutrition += 10
-            elif food_type == 'poison':
-                self.nutrition = -1
+    def get_snake_head(self):
+        x, y = self.body[0]
+        if self.facing == 'up':
+            new_head = (x, y-1)
+        elif self.facing == 'down':
+            new_head = (x, y+1)
+        elif self.facing == 'left':
+            new_head = (x-1, y)
+        elif self.facing == 'right':
+            new_head = (x+1, y)
+        return new_head
 
-            i = food_lst.index(new_head)
-            return food_lst[:i] + food_lst[i+1:]
 
+    def update(self, snake_head, nutrition):
+        self.nutrition += nutrition
+        if self.nutrition > 0:
+            self.grow(snake_head)
+        elif self.nutrition == 0:
+            self.move(snake_head)
         else:
-            return food_lst
+            self.shrink(snake_head)
 
-
-    def update(self, event):
-        self.change_facing(event)
-        new_head = self.get_new_head
-        food_lst = check_food(new_head, food_lst)
-        if nutrition > 0:
-            self.grow(new_head)
-        elif nutrition == 0:
-            self.move(new_head)
-        else:
-            self.shrink(new_head)
 
     def get_area(self):
         return self.area
 
+
     def get_body(self):
         return self.body
+
 
     def get_width(self):
         return self.width
@@ -208,7 +286,10 @@ class Food:
         if self.lasting_time <= 0:
             self.rotted = True
 
-    def get_position(self);
+    def time_passed(self):
+        self.lasting_time -= 1
+
+    def get_position(self):
         return self.position
 
     def get_type(self):
