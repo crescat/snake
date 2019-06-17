@@ -27,22 +27,25 @@ class Game:
             self.get_events(pygame.event.get())
             self.generate_food(2)
 
+            if self.event_queue is False:
+                self.running = False
+
             if self.snake_clock.should_update():
                 if self.state == 'running':
                     self.update()
 
             if self.render_clock.should_update():
                 snake_board = self.snake.get_area()
+                snake_board.fill(snake_board.get_surface(), (0,0,0))
                 snake_board.blit_snake(self.snake.get_width(), self.snake.get_body(), \
                                        (255,255,255))
+                snake_board.blit_food(self.snake.get_width(), self.food_lst)
                 self.background.blit(snake_board.get_surface(), (10, 10))
                 self.screen.blit(self.background.get_surface(), (0,0))
         pygame.quit()
 
 
     def update(self):
-        if self.event_queue is False:
-            self.running = False
         if self.event_queue:
             event = self.event_queue[0]
             self.event_queue = self.event_queue[1:]
@@ -58,6 +61,26 @@ class Game:
             self.generate_special('vege', 20)
             self.generate_special('super', 5)
         self.snake.update(new_head, nutrition)
+        if self.snake.is_dead():
+            self.state = 'game over'
+
+
+    def change_game_state(self):
+        if self.state == 'running':
+            self.state = 'paused'
+            #self.time_paused = time.monotonic()
+            self.snake_clock.pause()
+
+        elif self.state == 'paused':
+            self.state = 'running'
+            #self.time_resumed = time.monotonic()
+            #self.total_paused += self.time_resumed - self.time_paused
+            self.snake_clock.unpause()
+
+        elif self.state == 'game over' or self.state == 'not started':
+            self.state = 'running'
+            self.start()
+
 
 
     def get_events(self, events):
@@ -81,17 +104,17 @@ class Game:
                     self.event_queue = False
                 elif event.key == pygame.K_SPACE:
                     self.change_game_state()
-                    return event_queue
 
-                direction = what_direction(event)
-                if direction:
-                    if self.event_queue == []:
-                        self.event_queue.append(direction)
-
-                    elif self.event_queue and len(self.event_queue) <= 3:
-                        if self.event_queue[-1] != oppo_direction[direction] and \
-                           self.event_queue[-1] != direction:
+                if self.state == 'running':
+                    direction = what_direction(event)
+                    if direction:
+                        if self.event_queue == []:
                             self.event_queue.append(direction)
+
+                        elif self.event_queue and len(self.event_queue) <= 3:
+                            if self.event_queue[-1] != oppo_direction[direction] and \
+                            self.event_queue[-1] != direction:
+                                self.event_queue.append(direction)
 
 
     def generate_food(self, max_food_num):
@@ -99,7 +122,7 @@ class Game:
         snake_body = self.snake.get_body()
         food_pos = [food.get_position for food in self.food_lst]
         normal_food_num = len([food for food in self.food_lst \
-                               if food.get_type == 'normal'])
+                               if food.get_type() == 'normal'])
         existing_points = snake_body+food_pos
         if normal_food_num == 0:
             for _ in range(max_food_num):
@@ -188,6 +211,8 @@ class Surface:
     def blit(self, surface, position):
         self.surface.blit(surface, position)
 
+    def fill(self, surface, color):
+        self.surface.fill(color)
 
     def generate_random_point(self, point_width, existing_points):
         max_width = self.width // point_width - 1
@@ -198,11 +223,27 @@ class Surface:
         n = random.randint(0, len(empty_space)-1)
         return empty_space[n]
 
-    def blit_snake(self, snake_width, snake, color):
+    def blit_snake(self, cell_width, snake, color):
         for (x, y) in snake:
             pygame.draw.rect(self.surface, color,
-                            (snake_width*x, snake_width*y,
-                            snake_width, snake_width))
+                            (cell_width*x, cell_width*y,
+                            cell_width, cell_width))
+
+    def blit_food(self, cell_width, food_lst):
+        for food in food_lst:
+            x, y = food.get_position()
+            if food.get_type() == 'normal':
+                color = (255,255,255)
+            elif food.get_type() == 'poison':
+                color = (255,0,0)
+            elif food.get_type() == 'vege':
+                color = (0,255,0)
+            elif food.get_type() == 'super':
+                color = (0,0,255)
+            pygame.draw.rect(self.surface, color,
+                            (cell_width*x, cell_width*y,
+                            cell_width, cell_width))
+
 
     def get_surface(self):
         return self.surface
@@ -262,6 +303,15 @@ class Snake:
         else:
             self.shrink(snake_head)
 
+    def is_dead(self):
+        if len(self.body) != len(set(self.body)):
+            return True
+        for (x, y) in self.body:
+            if x < 0 or x >= self.area_x:
+                return True
+            if y < 0 or y >= self.area_y:
+                return True
+        return False
 
     def get_area(self):
         return self.area
@@ -279,12 +329,7 @@ class Food:
     def __init__(self, position, food_type='normal', lasting_time=999):
         self.position = position
         self.type = food_type
-        self.lasting_time = 999
-        self.rotted = False
-
-    def check_rotted(self):
-        if self.lasting_time <= 0:
-            self.rotted = True
+        self.lasting_time = lasting_time
 
     def time_passed(self):
         self.lasting_time -= 1
@@ -296,7 +341,7 @@ class Food:
         return self.type
 
     def is_rotted(self):
-        return self.rotted
+        return self.lasting_time <= 0
 
 
 if __name__ == '__main__':
