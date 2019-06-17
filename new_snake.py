@@ -24,7 +24,7 @@ class Game:
     def run(self):
         self.start()
         while self.running:
-            self.get_events(pygame.event.get())
+            self.process_events(pygame.event.get())
             self.generate_food(2)
 
             if self.event_queue is False:
@@ -65,7 +65,7 @@ class Game:
             self.state = 'game over'
 
 
-    def change_game_state(self):
+    def toggle_game_state(self):
         if self.state == 'running':
             self.state = 'paused'
             #self.time_paused = time.monotonic()
@@ -83,38 +83,48 @@ class Game:
 
 
 
-    def get_events(self, events):
-        def what_direction(event):
-            if event.key == pygame.K_UP:
-                return 'up'
-            elif event.key == pygame.K_DOWN:
-                return 'down'
-            elif event.key == pygame.K_LEFT:
-                return 'left'
-            elif event.key == pygame.K_RIGHT:
-                return 'right'
-
-        oppo_direction = {'up':'down', 'down':'up', 'left':'right', 'right':'left'}
+    def process_events(self, events):
         for event in events:
             if event.type == pygame.QUIT:
-                self.event_queue = False
+                self.quit_game()
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    self.event_queue = False
+                    self.quit_game()
                 elif event.key == pygame.K_SPACE:
-                    self.change_game_state()
+                    self.toggle_game_state()
 
-                if self.state == 'running':
-                    direction = what_direction(event)
-                    if direction:
-                        if self.event_queue == []:
-                            self.event_queue.append(direction)
+                if self.state != 'running':
+                    continue
 
-                        elif self.event_queue and len(self.event_queue) <= 3:
-                            if self.event_queue[-1] != oppo_direction[direction] and \
-                            self.event_queue[-1] != direction:
-                                self.event_queue.append(direction)
+                if event.key == pygame.K_UP:
+                    self.append_movement_event('up')
+                elif event.key == pygame.K_DOWN:
+                    self.append_movement_event('down')
+                elif event.key == pygame.K_LEFT:
+                    self.append_movement_event('left')
+                elif event.key == pygame.K_RIGHT:
+                    self.append_movement_event('right')
+    def quit_game(self):
+        self.event_queue = False
+
+    def append_movement_event(self, dir):
+        opposite_direction = {
+            'up': 'down',
+            'down': 'up',
+            'left': 'right',
+            'right': 'left'
+        }
+
+        if self.event_queue is False:
+            return
+        if len(self.event_queue) > 3:
+            return
+        if self.event_queue == []:
+            self.event_queue.append(dir)
+
+        if self.event_queue[-1] not in [dir, opposite_direction[dir]]:
+            self.event_queue.append(dir)
 
 
     def generate_food(self, max_food_num):
