@@ -42,7 +42,34 @@ class Game:
         self.state = 'running'
         self.event_queue = []
         self.food_lst = []
+        self.get_snake_pic()
+        self.body_tile = self.find_body_tile( \
+            self.snake.get_body(), self.snake.get_facing())
+
+    def get_snake_pic(self):
         snake_color = 'orange'
+        self.head_r = pygame.transform.scale( \
+            pygame.image.load('snake_pic/'+snake_color+'/head.png'), (self.cell_width, self.cell_width))
+        self.tail_r = pygame.transform.scale( \
+            pygame.image.load('snake_pic/'+snake_color+'/tail.png'), (self.cell_width, self.cell_width))
+        self.body_h = pygame.transform.scale( \
+            pygame.image.load('snake_pic/'+snake_color+'/body.png'), (self.cell_width, self.cell_width))
+        self.corner_dl = pygame.transform.scale( \
+            pygame.image.load('snake_pic/'+snake_color+'/corner.png'), (self.cell_width, self.cell_width))
+
+        self.head_u = pygame.transform.rotate(self.head_r, 90)
+        self.head_l = pygame.transform.rotate(self.head_r, 180)
+        self.head_d = pygame.transform.rotate(self.head_r, 270)
+
+        self.tail_u = pygame.transform.rotate(self.tail_r, 90)
+        self.tail_l = pygame.transform.rotate(self.tail_r, 180)
+        self.tail_d = pygame.transform.rotate(self.tail_r, 270)
+
+        self.body_v = pygame.transform.rotate(self.body_h, 90)
+
+        self.corner_dr = pygame.transform.rotate(self.corner_dl, 90)
+        self.corner_ur = pygame.transform.rotate(self.corner_dl, 180)
+        self.corner_ul = pygame.transform.rotate(self.corner_dl, 270)
 
 
     def run(self):
@@ -58,7 +85,8 @@ class Game:
             if self.snake_clock.should_update():
                 if self.state == 'running':
                     self.update()
-
+                    self.body_tile = self.find_body_tile( \
+                        self.snake.get_body(), self.snake.get_facing())
 
             if self.render_clock.should_update():
                 self.blit_snake()
@@ -264,28 +292,42 @@ class Game:
         lst = []
         for i in range(length):
             if i == 0:
-                lst.append('h_'+facing)
+                lst.append('head_'+facing)
                 continue
             elif i == length-1:
                 tail_facing = detect_tail_facing(snake_body[i], snake_body[i-1])
-                lst.append('t_'+tail_facing)
+                lst.append('tail_'+tail_facing)
                 continue
             corner_type = detect_corner(snake_body[i], snake_body[i-1], snake_body[i+1])
             if corner_type:
-                lst.append(corner_type)
+                lst.append('corner_'+corner_type)
                 body_facing = switch_body_facing(body_facing)
             else:
-                lst.append('b_'+body_facing)
+                lst.append('body_'+body_facing)
         return lst
 
 
     def blit_snake(self):
+        tile_dic = {
+            'head_up': self.head_u,
+            'head_down': self.head_d,
+            'head_left': self.head_l,
+            'head_right':self.head_r,
+            'tail_up': self.tail_u,
+            'tail_down': self.tail_d,
+            'tail_left': self.tail_l,
+            'tail_right':self.tail_r,
+            'body_horizontal': self.body_h,
+            'body_vertical': self.body_v,
+            'corner_downleft':self.corner_dl,
+            'corner_downright':self.corner_dr,
+            'corner_upleft': self.corner_ul,
+            'corner_upright':self.corner_ur
+        }
         self.playground.blit(self.playground_bg, (0, 0))
-        for (x, y) in self.snake.get_body():
-            pygame.draw.rect(self.playground, PALLETE['fg'],
-                            (self.cell_width*x, self.cell_width*y,
-                            self.cell_width, self.cell_width))
-
+        for (x, y), tile in zip(self.snake.get_body(), self.body_tile):
+            self.playground.blit(tile_dic[tile], \
+                (self.cell_width*x, self.cell_width*y))
 
 
     def blit_food(self):
