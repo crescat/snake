@@ -9,6 +9,8 @@ BG_x, BG_y = BG.get_rect().size
 PALLETE = {
     'fg': (255, 255, 255),
     'bg': (0, 0, 0),
+    'dark':(153, 196, 96),
+    'light':(188, 214, 100),
     'poison': (255, 0, 0),
     'vege': (0, 255, 0),
     'super': (0, 0, 255)
@@ -22,9 +24,9 @@ class Game:
         self.height = window_height
         self.snake_clock = Clock(10)
         self.render_clock = Clock(60)
-        self.cell_width = 20
-        self.col = 30
-        self.row = 23
+        self.cell_width = 30
+        self.col = 20
+        self.row = 15
         self.bg = pygame.transform.scale(BG, (window_width, window_height))
 
 
@@ -32,6 +34,8 @@ class Game:
         self.screen = pygame.display.set_mode((self.width, self.height))
         self.background = pygame.Surface(self.screen.get_size()).convert()
         self.playground = pygame.Surface((self.cell_width*self.col, self.cell_width*self.row))
+        self.playground_bg = pygame.Surface((self.cell_width*self.col, self.cell_width*self.row))
+        self.blit_playground_bg()
         self.snake_board = Playground(self.col, self.row)
         self.snake = Snake(initial_position=(self.col//2, self.row//2))
         self.running = True
@@ -42,6 +46,7 @@ class Game:
 
     def run(self):
         self.start()
+        border = (self.height - self.cell_width * self.row) // 2
         while self.running:
             self.process_events(pygame.event.get())
             self.generate_food(2)
@@ -57,7 +62,7 @@ class Game:
                 self.blit_snake()
                 self.blit_food()
                 self.background.blit(self.bg, (0,0))
-                self.background.blit(self.playground, (20,20))
+                self.background.blit(self.playground, (border,border))
                 self.screen.blit(self.background, (0,0))
                 pygame.display.update()
         pygame.quit()
@@ -68,8 +73,14 @@ class Game:
             event = self.event_queue[0]
             self.event_queue = self.event_queue[1:]
             self.snake.change_facing(event)
-        new_head = self.snake.get_snake_head()
-        nutrition = self.check_snake_head(new_head)
+        next_head = self.snake.get_snake_head()
+        nutrition = self.check_snake_head(next_head)
+        if self.snake.will_hit_wall(next_head, self.col, self.row):
+            self.state = 'game over'
+            return
+        if self.snake.will_eat_self(next_head):
+            self.state = 'game over'
+            return
         if nutrition:
             for food in self.food_lst:
                 food.time_passed()
@@ -78,11 +89,8 @@ class Game:
             self.generate_special_food('poison', PALLETE['poison'], 10)
             self.generate_special_food('vege', PALLETE['vege'], 20)
             self.generate_special_food('super', PALLETE['super'], 5)
-        self.snake.update(new_head, nutrition)
-        if self.snake.is_hitting_wall(self.col, self.row):
-            self.state = 'game over'
-        if self.snake.is_eating_self():
-            self.state = 'game over'
+        self.snake.update(next_head, nutrition)
+
 
 
     def toggle_game_state(self):
@@ -195,9 +203,19 @@ class Game:
                     return -999
         return 0
 
+    def blit_playground_bg(self):
+        color = {0:PALLETE['dark'], 1:PALLETE['light']}
+        for col in range(self.col):
+            color_index = col % 2
+            for row in range(self.row):
+                pygame.draw.rect(self.playground_bg, color[color_index],
+                            (self.cell_width*col, self.cell_width*row,
+                            self.cell_width, self.cell_width))
+                color_index = (color_index + 1) % 2
+
 
     def blit_snake(self):
-        self.playground.fill(PALLETE['bg'])
+        self.playground.blit(self.playground_bg, (0, 0))
         for (x, y) in self.snake.get_body():
             pygame.draw.rect(self.playground, PALLETE['fg'],
                             (self.cell_width*x, self.cell_width*y,
@@ -270,17 +288,17 @@ class Snake:
             self.facing = direction
 
 
-    def move(self, new_head):
-        self.body = [new_head] + self.body[:-1]
+    def move(self, next_head):
+        self.body = [next_head] + self.body[:-1]
 
 
-    def grow(self, new_head):
-        self.body = [new_head] + self.body
+    def grow(self, next_head):
+        self.body = [next_head] + self.body
         self.nutrition -= 1
 
 
-    def halve(self, new_head):
-        self.body = [new_head] + self.body[:len(self.body)//2]
+    def halve(self, next_head):
+        self.body = [next_head] + self.body[:len(self.body)//2]
         self.nutrition = 0
 
 
@@ -306,15 +324,15 @@ class Snake:
         else:
             self.halve(snake_head)
 
-    def is_eating_self(self):
-        return len(self.body) != len(set(self.body))
+    def will_eat_self(self, next_head):
+        return next_head in self.body
 
-    def is_hitting_wall(self, col, width):
-        for (x, y) in self.body:
-            if x < 0 or x >= col:
-                return True
-            if y < 0 or y >= width:
-                return True
+    def will_hit_wall(self, next_head, col, width):
+        x, y = next_head
+        if x < 0 or x >= col:
+            return True
+        if y < 0 or y >= width:
+            return True
         return False
 
     def get_body(self):
