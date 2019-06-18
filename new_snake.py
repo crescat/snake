@@ -2,6 +2,19 @@ import pygame
 import random
 import time
 
+BG = pygame.image.load('background.png')
+BG_x, BG_y = BG.get_rect().size
+
+
+PALLETE = {
+    'fg': (255, 255, 255),
+    'bg': (0, 0, 0),
+    'poison': (255, 0, 0),
+    'vege': (0, 255, 0),
+    'super': (0, 0, 255)
+}
+
+
 class Game:
     def __init__(self, window_width=800, window_height=500):
         pygame.init()
@@ -9,12 +22,18 @@ class Game:
         self.height = window_height
         self.snake_clock = Clock(10)
         self.render_clock = Clock(60)
+        self.cell_width = 20
+        self.col = 30
+        self.row = 23
+        self.bg = pygame.transform.scale(BG, (window_width, window_height))
 
 
     def start(self):
-        self.screen = Screen(self.width, self.height)
-        self.snake = Snake()
-        self.background = Surface(self.width, self.height, (255, 0, 0))
+        self.screen = pygame.display.set_mode((self.width, self.height))
+        self.background = pygame.Surface(self.screen.get_size()).convert()
+        self.playground = pygame.Surface((self.cell_width*self.col, self.cell_width*self.row))
+        self.snake_board = Playground(self.col, self.row)
+        self.snake = Snake(initial_position=(self.col//2, self.row//2))
         self.running = True
         self.state = 'running'
         self.event_queue = []
@@ -35,13 +54,12 @@ class Game:
                     self.update()
 
             if self.render_clock.should_update():
-                snake_board = self.snake.get_area()
-                snake_board.fill(snake_board.get_surface(), (0,0,0))
-                snake_board.blit_snake(self.snake.get_width(), self.snake.get_body(), \
-                                       (255,255,255))
-                snake_board.blit_food(self.snake.get_width(), self.food_lst)
-                self.background.blit(snake_board.get_surface(), (10, 10))
-                self.screen.blit(self.background.get_surface(), (0,0))
+                self.blit_snake()
+                self.blit_food()
+                self.background.blit(self.bg, (0,0))
+                self.background.blit(self.playground, (20,20))
+                self.screen.blit(self.background, (0,0))
+                pygame.display.update()
         pygame.quit()
 
 
@@ -57,11 +75,13 @@ class Game:
                 food.time_passed()
                 if food.is_rotted():
                     self.food_lst.remove(food)
-            self.generate_special('poison', 10)
-            self.generate_special('vege', 20)
-            self.generate_special('super', 5)
+            self.generate_special_food('poison', PALLETE['poison'], 10)
+            self.generate_special_food('vege', PALLETE['vege'], 20)
+            self.generate_special_food('super', PALLETE['super'], 5)
         self.snake.update(new_head, nutrition)
-        if self.snake.is_dead():
+        if self.snake.is_hitting_wall(self.col, self.row):
+            self.state = 'game over'
+        if self.snake.is_eating_self():
             self.state = 'game over'
 
 
@@ -105,6 +125,8 @@ class Game:
                     self.append_movement_event('left')
                 elif event.key == pygame.K_RIGHT:
                     self.append_movement_event('right')
+
+
     def quit_game(self):
         self.event_queue = False
 
@@ -128,34 +150,34 @@ class Game:
 
 
     def generate_food(self, max_food_num):
-        area = self.snake.get_area()
         snake_body = self.snake.get_body()
         food_pos = [food.get_position for food in self.food_lst]
         normal_food_num = len([food for food in self.food_lst \
                                if food.get_type() == 'normal'])
-        existing_points = snake_body+food_pos
-        if normal_food_num == 0:
-            for _ in range(max_food_num):
-                point = area.generate_random_point(self.snake.get_width(), existing_points)
-                self.food_lst.append(Food(point))
-                existing_points += [point]
+        masked_area = snake_body + food_pos
+        if normal_food_num != 0:
+            return
+
+        for _ in range(max_food_num):
+            point = self.snake_board.generate_random_point(self.cell_width, forbidden=masked_area)
+            self.food_lst.append(Food(point))
+            masked_area += [point]
 
 
-    def generate_special(self, food_type, probability):
-        area = self.snake.get_area()
+    def generate_special_food(self, food_type, food_color, probability):
         snake_body = self.snake.get_body()
         food_pos = [food.get_position() for food in self.food_lst]
-        existing_points = snake_body+food_pos
+        masked_area = snake_body + food_pos
 
         random_number = random.uniform(0, 1)
         if random_number <= probability/100:
-            point = area.generate_random_point(self.snake.get_width(), existing_points)
+            point = self.snake_board.generate_random_point(self.cell_width, forbidden=masked_area)
             if food_type == 'poison':
-                self.food_lst.append(Food(point, food_type, 5))
+                self.food_lst.append(Food(point, food_type, food_color, 5))
             elif food_type == 'vege':
-                self.food_lst.append(Food(point, food_type, 3))
+                self.food_lst.append(Food(point, food_type, food_color, 3))
             elif food_type == 'super':
-                self.food_lst.append(Food(point, food_type, 1))
+                self.food_lst.append(Food(point, food_type, food_color, 1))
 
 
     def check_snake_head(self, snake_head):
@@ -172,6 +194,24 @@ class Game:
                 elif food_type == 'poison':
                     return -999
         return 0
+
+
+    def blit_snake(self):
+        self.playground.fill(PALLETE['bg'])
+        for (x, y) in self.snake.get_body():
+            pygame.draw.rect(self.playground, PALLETE['fg'],
+                            (self.cell_width*x, self.cell_width*y,
+                            self.cell_width, self.cell_width))
+
+
+    def blit_food(self):
+        for food in self.food_lst:
+            x, y = food.get_position()
+            color = food.get_color()
+            pygame.draw.rect(self.playground, color,
+                            (self.cell_width*x, self.cell_width*y,
+                            self.cell_width, self.cell_width))
+
 
 class Clock:
     def __init__(self, ups):
@@ -198,82 +238,35 @@ class Clock:
         self.ups = new_ups
 
 
-class Screen:
-    def __init__(self, width, height):
-        self.width = width
-        self.height = height
-        self.screen = pygame.display.set_mode((self.width, self.height))
+class Playground:
+    def __init__(self, col, row):
+        self.col = col
+        self.row = row
 
-
-    def blit(self, board, position):
-        self.screen.blit(board, position)
-        pygame.display.update()
-
-
-class Surface:
-    def __init__(self, width, height, color=(0,0,0)):
-        self.width = width
-        self.height = height
-        self.surface = pygame.Surface((self.width, self.height))
-        self.surface.fill(color)
-
-
-    def blit(self, surface, position):
-        self.surface.blit(surface, position)
-
-    def fill(self, surface, color):
-        self.surface.fill(color)
-
-    def generate_random_point(self, point_width, existing_points):
-        max_width = self.width // point_width - 1
-        max_height = self.height // point_width - 1
-        empty_space = [(a, b) for a in range(max_width)
-                              for b in range(max_height)
-                              if (a, b) not in existing_points]
+    def generate_random_point(self, point_width, forbidden=[]):
+        empty_space = [(a, b) for a in range(self.col)
+                              for b in range(self.row)
+                              if (a, b) not in forbidden]
         n = random.randint(0, len(empty_space)-1)
         return empty_space[n]
 
-    def blit_snake(self, cell_width, snake, color):
-        for (x, y) in snake:
-            pygame.draw.rect(self.surface, color,
-                            (cell_width*x, cell_width*y,
-                            cell_width, cell_width))
-
-    def blit_food(self, cell_width, food_lst):
-        for food in food_lst:
-            x, y = food.get_position()
-            if food.get_type() == 'normal':
-                color = (255,255,255)
-            elif food.get_type() == 'poison':
-                color = (255,0,0)
-            elif food.get_type() == 'vege':
-                color = (0,255,0)
-            elif food.get_type() == 'super':
-                color = (0,0,255)
-            pygame.draw.rect(self.surface, color,
-                            (cell_width*x, cell_width*y,
-                            cell_width, cell_width))
-
-
-    def get_surface(self):
-        return self.surface
-
 
 class Snake:
-    def __init__(self, length=1, facing='right', width=20, area=(30,20)):
+    def __init__(self, length=1, facing='right', initial_position=(15,10)):
         self.length = length
-        self.width = width
-        self.area_x = area[0]
-        self.area_y = area[1]
         self.facing = facing
-        self.body = [(self.area_x//2, self.area_y//2)]
-        self.area = Surface(self.width*self.area_x, self.width*self.area_y)
+        self.body = [initial_position]
         self.nutrition = 0
 
 
     def change_facing(self, direction):
-        oppo_direction = {'up':'down', 'down':'up', 'left':'right', 'right':'left'}
-        if direction != oppo_direction[self.facing]:
+        opposite_direction = {
+            'up': 'down',
+            'down': 'up',
+            'left': 'right',
+            'right': 'left'
+        }
+        if direction != opposite_direction[self.facing]:
             self.facing = direction
 
 
@@ -286,7 +279,7 @@ class Snake:
         self.nutrition -= 1
 
 
-    def shrink(self, new_head):
+    def halve(self, new_head):
         self.body = [new_head] + self.body[:len(self.body)//2]
         self.nutrition = 0
 
@@ -311,35 +304,30 @@ class Snake:
         elif self.nutrition == 0:
             self.move(snake_head)
         else:
-            self.shrink(snake_head)
+            self.halve(snake_head)
 
-    def is_dead(self):
-        if len(self.body) != len(set(self.body)):
-            return True
+    def is_eating_self(self):
+        return len(self.body) != len(set(self.body))
+
+    def is_hitting_wall(self, col, width):
         for (x, y) in self.body:
-            if x < 0 or x >= self.area_x:
+            if x < 0 or x >= col:
                 return True
-            if y < 0 or y >= self.area_y:
+            if y < 0 or y >= width:
                 return True
         return False
-
-    def get_area(self):
-        return self.area
-
 
     def get_body(self):
         return self.body
 
 
-    def get_width(self):
-        return self.width
-
-
 class Food:
-    def __init__(self, position, food_type='normal', lasting_time=999):
+    def __init__(self, position, food_type='normal', color=(255,255,255), \
+                lasting_time=999):
         self.position = position
         self.type = food_type
         self.lasting_time = lasting_time
+        self.color = color
 
     def time_passed(self):
         self.lasting_time -= 1
@@ -349,6 +337,9 @@ class Food:
 
     def get_type(self):
         return self.type
+
+    def get_color(self):
+        return self.color
 
     def is_rotted(self):
         return self.lasting_time <= 0
