@@ -42,6 +42,7 @@ class Game:
         self.state = 'running'
         self.event_queue = []
         self.food_lst = []
+        snake_color = 'orange'
 
 
     def run(self):
@@ -57,6 +58,7 @@ class Game:
             if self.snake_clock.should_update():
                 if self.state == 'running':
                     self.update()
+
 
             if self.render_clock.should_update():
                 self.blit_snake()
@@ -74,13 +76,15 @@ class Game:
             self.event_queue = self.event_queue[1:]
             self.snake.change_facing(event)
         next_head = self.snake.get_snake_head()
-        nutrition = self.check_snake_head(next_head)
+
         if self.snake.will_hit_wall(next_head, self.col, self.row):
             self.state = 'game over'
             return
         if self.snake.will_eat_self(next_head):
             self.state = 'game over'
             return
+
+        nutrition = self.check_snake_head(next_head)
         if nutrition:
             for food in self.food_lst:
                 food.time_passed()
@@ -214,12 +218,74 @@ class Game:
                 color_index = (color_index + 1) % 2
 
 
+    def find_body_tile(self, snake_body, facing):
+        def detect_corner(point, previous_point, next_point):
+            x1, y1 = previous_point
+            x2, y2 = point
+            x3, y3 = next_point
+            if x1 == x2 and x2 == x3:
+                return False
+            if y1 == y2 and y2 == y3:
+                return False
+            if all([y1<y2, x2<x3]) or all([x1>x2, y2>y3]):
+                return 'upright'
+            if all([y1<y2, x2>x3]) or all([x1<x2, y2>y3]):
+                return 'upleft'
+            if all([y1>y2, x2<x3]) or all([x1>x2, y2<y3]):
+                return 'downright'
+            if all([y1>y2, x2>x3]) or all([x1<x2, y2<y3]):
+                return 'downleft'
+
+        def detect_tail_facing(tail, before_tail):
+            x1, y1 = before_tail
+            x2, y2 = tail
+            if x1 == x2 and y1 < y2:
+                return 'up'
+            if x1 == x2 and y1 > y2:
+                return 'down'
+            if x1 < x2 and y1 == y2:
+                return 'left'
+            if x1 > x2 and y1 == y2:
+                return 'right'
+
+        def detect_body_facing(facing):
+            if facing == 'up' or facing == 'down':
+                return 'vertical'
+            elif facing == 'left' or facing == 'right':
+                return 'horizontal'
+
+        def switch_body_facing(body_facing):
+            if body_facing == 'horizontal':
+                return 'vertical'
+            return 'horizontal'
+
+        length = len(snake_body)
+        body_facing = detect_body_facing(facing)
+        lst = []
+        for i in range(length):
+            if i == 0:
+                lst.append('h_'+facing)
+                continue
+            elif i == length-1:
+                tail_facing = detect_tail_facing(snake_body[i], snake_body[i-1])
+                lst.append('t_'+tail_facing)
+                continue
+            corner_type = detect_corner(snake_body[i], snake_body[i-1], snake_body[i+1])
+            if corner_type:
+                lst.append(corner_type)
+                body_facing = switch_body_facing(body_facing)
+            else:
+                lst.append('b_'+body_facing)
+        return lst
+
+
     def blit_snake(self):
         self.playground.blit(self.playground_bg, (0, 0))
         for (x, y) in self.snake.get_body():
             pygame.draw.rect(self.playground, PALLETE['fg'],
                             (self.cell_width*x, self.cell_width*y,
                             self.cell_width, self.cell_width))
+
 
 
     def blit_food(self):
@@ -270,10 +336,11 @@ class Playground:
 
 
 class Snake:
-    def __init__(self, length=1, facing='right', initial_position=(15,10)):
+    def __init__(self, length=1, initial_position=(15,10)):
         self.length = length
-        self.facing = facing
-        self.body = [initial_position]
+        self.facing = 'right'
+        x, y = initial_position
+        self.body = [(x, y), (x-1, y)]
         self.nutrition = 0
 
 
@@ -338,6 +405,8 @@ class Snake:
     def get_body(self):
         return self.body
 
+    def get_facing(self):
+        return self.facing
 
 class Food:
     def __init__(self, position, food_type='normal', color=(255,255,255), \
