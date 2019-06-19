@@ -46,8 +46,10 @@ class Game:
         self.body_tile = self.find_body_tile( \
             self.snake.get_body(), self.snake.get_facing())
 
+
     def get_snake_pic(self):
-        snake_color = 'orange'
+        snake_color_lst = ['orange', 'blue', 'pink', 'white', 'purple', 'yellow', 'red']
+        snake_color = snake_color_lst[random.randint(0,len(snake_color_lst)-1)]
         self.head_r = pygame.transform.scale( \
             pygame.image.load('snake_pic/'+snake_color+'/head.png'), (self.cell_width, self.cell_width))
         self.tail_r = pygame.transform.scale( \
@@ -56,21 +58,8 @@ class Game:
             pygame.image.load('snake_pic/'+snake_color+'/body.png'), (self.cell_width, self.cell_width))
         self.corner_dl = pygame.transform.scale( \
             pygame.image.load('snake_pic/'+snake_color+'/corner.png'), (self.cell_width, self.cell_width))
-
-        self.head_u = pygame.transform.rotate(self.head_r, 90)
-        self.head_l = pygame.transform.rotate(self.head_r, 180)
-        self.head_d = pygame.transform.rotate(self.head_r, 270)
-
-        self.tail_u = pygame.transform.rotate(self.tail_r, 90)
-        self.tail_l = pygame.transform.rotate(self.tail_r, 180)
-        self.tail_d = pygame.transform.rotate(self.tail_r, 270)
-
-        self.body_v = pygame.transform.rotate(self.body_h, 90)
-
-        self.corner_dr = pygame.transform.rotate(self.corner_dl, 90)
-        self.corner_ur = pygame.transform.rotate(self.corner_dl, 180)
-        self.corner_ul = pygame.transform.rotate(self.corner_dl, 270)
-
+        self.dead_head_r = pygame.transform.scale( \
+            pygame.image.load('snake_pic/'+snake_color+'/dead.png'), (self.cell_width, self.cell_width))
 
     def run(self):
         self.start()
@@ -87,9 +76,16 @@ class Game:
                     self.update()
                     self.body_tile = self.find_body_tile( \
                         self.snake.get_body(), self.snake.get_facing())
+                elif self.state == 'dying':
+                    self.state = 'game over'
+                    self.body_tile = self.find_body_tile( \
+                        self.snake.get_body(), self.snake.get_facing())
 
             if self.render_clock.should_update():
-                self.blit_snake()
+                if self.state == 'running' or self.state == 'dying':
+                    self.blit_snake()
+                elif self.state == 'game over':
+                    self.blit_dead_snake()
                 self.blit_food()
                 self.background.blit(self.bg, (0,0))
                 self.background.blit(self.playground, (border,border))
@@ -105,12 +101,11 @@ class Game:
             self.snake.change_facing(event)
         next_head = self.snake.get_snake_head()
 
-        if self.snake.will_hit_wall(next_head, self.col, self.row):
-            self.state = 'game over'
-            return
-        if self.snake.will_eat_self(next_head):
-            self.state = 'game over'
-            return
+        if self.snake.will_hit_wall(next_head, self.col, self.row) or \
+            self.snake.will_eat_self(next_head):
+            self.state = 'dying'
+            self.previous_snake_body = self.snake.get_body()
+            self.previous_body_tile = self.body_tile
 
         nutrition = self.check_snake_head(next_head)
         if nutrition:
@@ -126,13 +121,14 @@ class Game:
 
 
     def toggle_game_state(self):
-        if self.state == 'running':
+        if self.state == 'running' or self.state == 'dying':
+            self.previous_state = self.state
             self.state = 'paused'
             #self.time_paused = time.monotonic()
             self.snake_clock.pause()
 
         elif self.state == 'paused':
-            self.state = 'running'
+            self.state = self.previous_state
             #self.time_resumed = time.monotonic()
             #self.total_paused += self.time_resumed - self.time_paused
             self.snake_clock.unpause()
@@ -247,7 +243,7 @@ class Game:
 
 
     def find_body_tile(self, snake_body, facing):
-        def detect_corner(point, previous_point, next_point):
+        def detect_corner_degree(point, previous_point, next_point):
             x1, y1 = previous_point
             x2, y2 = point
             x3, y3 = next_point
@@ -255,79 +251,93 @@ class Game:
                 return False
             if y1 == y2 and y2 == y3:
                 return False
-            if all([y1<y2, x2<x3]) or all([x1>x2, y2>y3]):
-                return 'upright'
             if all([y1<y2, x2>x3]) or all([x1<x2, y2>y3]):
-                return 'upleft'
+                return 270 # upleft
+            if all([y1<y2, x2<x3]) or all([x1>x2, y2>y3]):
+                return 180 # upright
             if all([y1>y2, x2<x3]) or all([x1>x2, y2<y3]):
-                return 'downright'
+                return 90 # downright
             if all([y1>y2, x2>x3]) or all([x1<x2, y2<y3]):
-                return 'downleft'
+                return 0 # downleft
 
-        def detect_tail_facing(tail, before_tail):
+        def detect_tail_degree(tail, before_tail):
             x1, y1 = before_tail
             x2, y2 = tail
-            if x1 == x2 and y1 < y2:
-                return 'up'
+
             if x1 == x2 and y1 > y2:
-                return 'down'
+                return 270 #'down'
             if x1 < x2 and y1 == y2:
-                return 'left'
+                return 180 #'left'
+            if x1 == x2 and y1 < y2:
+                return 90 #'up'
             if x1 > x2 and y1 == y2:
-                return 'right'
+                return 0 #'right'
 
-        def detect_body_facing(facing):
+        def detect_body_degree(facing):
             if facing == 'up' or facing == 'down':
-                return 'vertical'
+                return 90 #'vertical'
             elif facing == 'left' or facing == 'right':
-                return 'horizontal'
+                return 0 #'horizontal'
 
-        def switch_body_facing(body_facing):
-            if body_facing == 'horizontal':
-                return 'vertical'
-            return 'horizontal'
+        def switch_body_degree(body_facing):
+            if body_facing == 0:
+                return 90
+            return 0
+
+        def facing_to_degree(facing):
+            if facing == 'right':
+                return 0
+            if facing == 'up':
+                return 90
+            if facing == 'left':
+                return 180
+            if facing == 'down':
+                return 270
 
         length = len(snake_body)
-        body_facing = detect_body_facing(facing)
+        body_degree = detect_body_degree(facing)
         lst = []
         for i in range(length):
             if i == 0:
-                lst.append('head_'+facing)
+                lst.append(('head', facing_to_degree(facing)))
                 continue
             elif i == length-1:
-                tail_facing = detect_tail_facing(snake_body[i], snake_body[i-1])
-                lst.append('tail_'+tail_facing)
+                tail_degree = detect_tail_degree(snake_body[i], snake_body[i-1])
+                lst.append(('tail', tail_degree))
                 continue
-            corner_type = detect_corner(snake_body[i], snake_body[i-1], snake_body[i+1])
-            if corner_type:
-                lst.append('corner_'+corner_type)
-                body_facing = switch_body_facing(body_facing)
+            corner_degree = detect_corner_degree(snake_body[i], snake_body[i-1], snake_body[i+1])
+            if type(corner_degree) is int:
+                lst.append(('corner', corner_degree))
+                body_degree = switch_body_degree(body_degree)
             else:
-                lst.append('body_'+body_facing)
+                lst.append(('body', body_degree))
         return lst
 
 
     def blit_snake(self):
         tile_dic = {
-            'head_up': self.head_u,
-            'head_down': self.head_d,
-            'head_left': self.head_l,
-            'head_right':self.head_r,
-            'tail_up': self.tail_u,
-            'tail_down': self.tail_d,
-            'tail_left': self.tail_l,
-            'tail_right':self.tail_r,
-            'body_horizontal': self.body_h,
-            'body_vertical': self.body_v,
-            'corner_downleft':self.corner_dl,
-            'corner_downright':self.corner_dr,
-            'corner_upleft': self.corner_ul,
-            'corner_upright':self.corner_ur
+            'head': self.head_r,
+            'tail': self.tail_r,
+            'body': self.body_h,
+            'corner':self.corner_dl,
         }
         self.playground.blit(self.playground_bg, (0, 0))
-        for (x, y), tile in zip(self.snake.get_body(), self.body_tile):
-            self.playground.blit(tile_dic[tile], \
+        for (x, y), (tile, degree) in list(zip(self.snake.get_body(), self.body_tile))[::-1]:
+            self.playground.blit(pygame.transform.rotate(tile_dic[tile], degree), \
                 (self.cell_width*x, self.cell_width*y))
+
+    def blit_dead_snake(self):
+        tile_dic = {
+            'head': self.dead_head_r,
+            'tail': self.tail_r,
+            'body': self.body_h,
+            'corner':self.corner_dl,
+        }
+        self.playground.blit(self.playground_bg, (0, 0))
+        for (x, y), (tile, degree) in zip(self.previous_snake_body, self.previous_body_tile):
+            self.playground.blit(pygame.transform.rotate(tile_dic[tile], degree), \
+                (self.cell_width*x, self.cell_width*y))
+
 
 
     def blit_food(self):
@@ -382,7 +392,7 @@ class Snake:
         self.length = length
         self.facing = 'right'
         x, y = initial_position
-        self.body = [(x, y), (x-1, y)]
+        self.body = [(x, y), (x-1, y), (x-2, y)]
         self.nutrition = 0
 
 
@@ -406,8 +416,13 @@ class Snake:
         self.nutrition -= 1
 
 
-    def halve(self, next_head):
-        self.body = [next_head] + self.body[:len(self.body)//2]
+    def halve(self, next_head): # minimum length = 3
+        length = len(self.body)
+        half = length // 2
+        if half <= 3:
+            self.body = [next_head] + self.body[0:2]
+        else:
+            self.body = [next_head] + self.body[:len(self.body)//2]
         self.nutrition = 0
 
 
